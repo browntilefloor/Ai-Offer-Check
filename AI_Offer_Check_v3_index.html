@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Offer Check</title>
+<style>
+body{margin:0;font-family:Arial,sans-serif;background:#f3f4f6;color:#17181c}
+.wrap{max-width:680px;margin:auto;padding:18px}
+.hero,.card{background:white;border-radius:24px;padding:24px;margin-bottom:16px;box-shadow:0 2px 12px #00000010}
+.hero{background:#111318;color:white}
+.badge{font-size:12px;font-weight:700;letter-spacing:1px}
+h1{font-size:34px;margin:10px 0}
+h2{font-size:20px}
+label{display:block;font-weight:700;margin:18px 0 8px}
+input[type=file],input[type=url],textarea{width:100%;box-sizing:border-box;padding:14px;border:1px solid #d6d7db;border-radius:14px;font-size:16px;background:white}
+textarea{min-height:130px;resize:vertical}
+small{display:block;color:#70727a;line-height:1.4;margin-top:7px}
+.checks label{font-weight:500;margin:10px 0}
+button{width:100%;padding:16px;border:0;border-radius:14px;background:#111318;color:white;font-size:17px;font-weight:700;margin-top:18px}
+button.secondary{background:#e9eaee;color:#17181c}
+.result{border-radius:18px;padding:18px;margin-top:18px}
+.low{background:#e8f7ec}.caution{background:#fff4d8}.high{background:#ffe6e6}.need{background:#e9eefc}
+ul{padding-left:22px;line-height:1.5}
+.footer{text-align:center;color:#777;font-size:13px;padding:8px}
+.progress{display:none;margin-top:12px;color:#555}
+</style>
+</head>
+<body>
+<div class="wrap">
+<section class="hero">
+<div class="badge">BETA</div>
+<h1>AI Offer Check</h1>
+<div>Before you click, pay, reply, or share information, check the message or offer for warning signs.</div>
+</section>
+
+<section class="card">
+<label for="shot">Screenshot</label>
+<input id="shot" type="file" accept="image/*">
+<small>Redact passwords, full card numbers, bank details, SSNs, security codes, and other sensitive information before submitting.</small>
+
+<label for="url">Website or link (optional)</label>
+<input id="url" type="url" placeholder="https://example.com">
+
+<label for="msg">Paste the message or offer (optional)</label>
+<textarea id="msg" placeholder="Paste the email, ad, text message, job offer, promotion, etc."></textarea>
+
+<label>What are you considering doing?</label>
+<div class="checks">
+<label><input type="checkbox" value="Clicking a link"> Clicking a link</label>
+<label><input type="checkbox" value="Buying something"> Buying something</label>
+<label><input type="checkbox" value="Signing up"> Signing up</label>
+<label><input type="checkbox" value="Replying"> Replying</label>
+<label><input type="checkbox" value="Investing / sending money"> Investing / sending money</label>
+<label><input type="checkbox" value="Downloading something"> Downloading something</label>
+</div>
+
+<button onclick="runCheck()">Run preliminary check</button>
+<div id="progress" class="progress">Reading the screenshot…</div>
+<div id="result"></div>
+</section>
+
+<div class="footer">AI Offer Check • Beta • Information service, not a guarantee of safety</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+async function runCheck(){
+ const file=$('shot').files[0], url=$('url').value.trim();
+ let text=$('msg').value.trim();
+ $('result').innerHTML='';
+ $('progress').style.display='block';
+ if(file){
+  $('progress').textContent='Reading the screenshot… this may take a little while on a phone.';
+  try{text+=(text?'\\n':'')+(await Tesseract.recognize(file,'eng')).data.text}
+  catch(e){text+='\\n[The screenshot could not be read automatically.]'}
+ }
+ $('progress').style.display='none';
+ const checks=[
+  ['unsolicited sexual/adult content',/(naked|private.*photos|sexy|sex-y|doggy style|adult.*photos|explicit)/i.test(text),3],
+  ['request to enter or confirm an email address',/(enter your email|email.*free|confirm.*email)/i.test(text),2],
+  ['suspicious link or attachment language',/(open album|download|attachment|click here|open.*video|mp4|free join)/i.test(text),2],
+  ['urgency or pressure',/(urgent|act now|expires|limited time|available now)/i.test(text),1],
+  ['request for money or payment',/(payment|pay now|send money|gift card|bitcoin|crypto)/i.test(text),2],
+  ['request for credentials or sensitive information',/(password|security code|verification code|social security|bank account|credit card)/i.test(text),3]
+ ];
+ let score=0,found=[];
+ checks.forEach(([n,h,p])=>{if(h){score+=p;found.push(n)}});
+ let cls,title,intro;
+ if(!text&&!url){cls='need';title='NEEDS MORE INFORMATION';intro='Upload a screenshot, paste the message, or provide a link. This check does not make a safety judgment without evidence.'}
+ else if(score>=5){cls='high';title='HIGH RISK — DO NOT ENGAGE YET';intro='Multiple warning patterns were detected. This is a preliminary screen, not proof of fraud.'}
+ else if(score>=2){cls='caution';title='VERIFY FIRST';intro='One or more warning patterns were detected. Verify the sender, company, and destination independently before acting.'}
+ else{cls='low';title='NO OBVIOUS WARNING PATTERN';intro='No major warning pattern was detected in the text we could read. That does not prove the offer is safe or legitimate.'}
+ const list=found.length?found.map(x=>'<li>'+x+'</li>').join(''):'<li>No obvious pattern was detected by this preliminary screen.</li>';
+ const prompt=`Analyze this customer submission for AI Offer Check. Separate verified facts from allegations. Do not claim something is definitely safe or a scam unless strong evidence supports it. Check the company/sender, URL, claims, urgency, requests for money or credentials, terms, and independent evidence. If current facts are needed, research reliable sources. Give a risk level (LOW CONCERN / VERIFY FIRST / HIGH RISK), explain the evidence, and give safe next steps.\\n\\nWebsite/link: ${url||'[none]'}\\n\\nExtracted/submitted text:\\n${text||'[none]'}`;
+ $('result').innerHTML=`<div class="result ${cls}"><h2>${title}</h2><p>${intro}</p><h3>What we found</h3><ul>${list}</ul><h3>What to do next</h3><ul><li>Do not provide passwords, security codes, banking details, or full payment information through an unsolicited message.</li><li>Verify the sender/company using a website or app you navigate to yourself.</li><li>For a stronger analysis, copy the case below into an AI research chat.</li></ul><button class="secondary" onclick='copyCase(${JSON.stringify(prompt)})'>Copy this case for AI analysis</button></div>`;
+}
+async function copyCase(t){
+ try{await navigator.clipboard.writeText(t);alert('Case copied. Paste it into ChatGPT for the full AI research analysis.')}
+ catch(e){prompt('Copy this case:',t)}
+}
+</script>
+</body>
+</html>
